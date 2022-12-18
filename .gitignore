@@ -1,0 +1,5 @@
+cmake-build*
+*.o
+simple_JIT
+.idea
+*.swp

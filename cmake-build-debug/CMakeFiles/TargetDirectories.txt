@@ -1,3 +1,0 @@
-/home/ryan/projects/simple-JIT/cmake-build-debug/CMakeFiles/simple_JIT.dir
-/home/ryan/projects/simple-JIT/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/ryan/projects/simple-JIT/cmake-build-debug/CMakeFiles/rebuild_cache.dir
