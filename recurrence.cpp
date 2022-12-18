@@ -175,6 +175,10 @@ double recurrence::compute(size_t nIter, bool use_jit) {
         return nLast;
 }
 
+// TODO: change movsd instructions to movapd.
+//  Note that movapd requires its memory operands to be 16-byte-aligned,
+//  and it looks like it may not be worth the trade-off, so maybe we'll
+//  only do this for XMM register copies
 void recurrence::jit_compile() {
         vector<uint8_t> code {
                 0x55,                           // push   %rbp
@@ -189,32 +193,25 @@ void recurrence::jit_compile() {
 //                0xc3,                         // ret
         };
 
-
+        auto append_code = [&code] (std::initializer_list<uint8_t> bytes) {
+                code.insert(code.end(), bytes.begin(), bytes.end());
+        };
 
         for (const auto &tok : pf) {
                 switch (tok.first) {
                     case VAR:
                         // movsd %xmm2, -0x8(%rsp)
-                        code.push_back(0xf2);
-                        code.push_back(0x0f);
-                        code.push_back(0x11);
-                        code.push_back(0x54);
-                        code.push_back(0x24);
-                        code.push_back(0xf8);
+                        append_code({0xf2, 0x0f, 0x11, 0x54, 0x24, 0xf8});
 
                         // sub $0x8, %rsp
-                        code.push_back(0x48);
-                        code.push_back(0x83);
-                        code.push_back(0xec);
-                        code.push_back(0x08);
+                        append_code({0x48, 0x83, 0xec, 0x08});
                         break;
                     case VAL: {
                             uint64_t operand = *reinterpret_cast<const uint64_t *>(&tok.second);
                             // rather than pushing the immediate, we use the `movabs`
                             // instruction to load the full 64-bit immediate into %rax
                             // and then push %rax onto the stack
-                            code.push_back(0x48);
-                            code.push_back(0xb8);
+                            append_code({0x48, 0xb8});
                             for (int i = 0; i < 8; i++) {
                                     code.push_back(operand & 0xff);
                                     operand >>= 8;
@@ -237,22 +234,12 @@ void recurrence::jit_compile() {
                      */
                     case PLUS ... DIV: {
                         // movsd 0x0(%rsp), %xmm1
-                        code.push_back(0xf2);
-                        code.push_back(0x0f);
-                        code.push_back(0x10);
-                        code.push_back(0x0c);
-                        code.push_back(0x24);
+                        append_code({0xf2, 0x0f, 0x10, 0x0c, 0x24});
                         // movsd 0x8(%rsp), %xmm0
-                        code.push_back(0xf2);
-                        code.push_back(0x0f);
-                        code.push_back(0x10);
-                        code.push_back(0x44);
-                        code.push_back(0x24);
-                        code.push_back(0x08);
+                        append_code({0xf2, 0x0f, 0x10, 0x44, 0x24, 0x08});
 
                         // <op> %xmm1, %xmm0
-                        code.push_back(0xf2);
-                        code.push_back(0x0f);
+                        append_code({0xf2, 0x0f});
                         switch (tok.first) {
                             case PLUS:
                                 code.push_back(0x58);
@@ -270,16 +257,10 @@ void recurrence::jit_compile() {
                         code.push_back(0xc1);
 
                         // add $0x8, %rsp
-                        code.push_back(0x48);
-                        code.push_back(0x83);
-                        code.push_back(0xc4);
-                        code.push_back(0x08);
+                        append_code({0x48, 0x83, 0xc4, 0x08});
+
                         // movsd %xmm0, 0x0(%rsp)
-                        code.push_back(0xf2);
-                        code.push_back(0x0f);
-                        code.push_back(0x11);
-                        code.push_back(0x04);
-                        code.push_back(0x24);
+                        append_code({0xf2, 0x0f, 0x11, 0x04, 0x24});
                         break;
                     }
                     default:
@@ -289,25 +270,19 @@ void recurrence::jit_compile() {
         }
 
         // movq   %xmm0,%rax
-        code.push_back(0x66);
-        code.push_back(0x48);
-        code.push_back(0x0f);
-        code.push_back(0x7e);
-        code.push_back(0xc0);
+        append_code({0x66, 0x48, 0x0f, 0x7e, 0xc0});
 
         // movq   %rax,%xmm0
-        code.push_back(0x66);
-        code.push_back(0x48);
-        code.push_back(0x0f);
-        code.push_back(0x6e);
-        code.push_back(0xc0);
+        append_code({0x66, 0x48, 0x0f, 0x6e, 0xc0});
 
         // mov  %rbp, %rsp
-        code.push_back(0x48);
-        code.push_back(0x89);
-        code.push_back(0xec);
-        code.push_back(0x5d); // pop    %rbp
-        code.push_back(0xc3); // ret
+        append_code({0x48, 0x89, 0xec});
+
+        // pop    %rbp
+        code.push_back(0x5d);
+
+        // ret
+        code.push_back(0xc3);
 
         this->codesize = code.size();
         auto *codepage = static_cast<uint8_t *>(mmap(nullptr, this->codesize,
@@ -326,6 +301,11 @@ void recurrence::jit_compile() {
         }
 
         jit_compute = reinterpret_cast<double (*)(double)>(codepage);
+}
+
+void recurrence::postfix_optimize() {
+        // STUB
+        return;
 }
 
 void recurrence::print_tokens(const vector<token> &tkns) {

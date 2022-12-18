@@ -36,6 +36,8 @@ public:
 
     double compute(size_t nIter, bool use_jit= true);
 
+    void postfix_optimize();
+
     void jit_compile();
 
     void print_toks() { print_tokens(tokens); }
