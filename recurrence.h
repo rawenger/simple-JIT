@@ -11,17 +11,17 @@
 using std::string, std::vector;
 
 class recurrence {
-    enum TOKENTYPES {
+    enum TOKENTYPE {
         PLUS,
         MINUS,
         TIMES,
         DIV,
+        VAR,
+        VAL,
         LPAR,
         RPAR,
-        VAR,
-        VAL
     };
-    using token = std::pair<TOKENTYPES, double>;
+    using token = std::pair<TOKENTYPE, double>;
     string eqn;
     vector<token> tokens;
     vector<token> pf;

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stack>
 #include <algorithm>
+#include <list>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -73,7 +74,7 @@ recurrence::recurrence(string formula, double init_cond)
         // to support these types of expressions. Maybe another time.
         // A consequence of requiring parenthesis aroun everything is we don't
         // have to parse PEMDAS either.
-        stack<TOKENTYPES> ops;
+        stack<TOKENTYPE> ops;
         vector<token> postfix;
         postfix.reserve(tokens.size());
         int par_depth = 0;
@@ -84,6 +85,12 @@ recurrence::recurrence(string formula, double init_cond)
                         case PLUS ... DIV:
                                 ops.push(it->first);
                                 break;
+                        case VAR:
+                                postfix.emplace_back(VAR, 0);
+                                break;
+                        case VAL:
+                                postfix.emplace_back(VAL, it->second);
+                                break;
                         case LPAR:
                                 ++par_depth;
                                 break;
@@ -91,12 +98,6 @@ recurrence::recurrence(string formula, double init_cond)
                                 --par_depth;
                                 postfix.emplace_back(ops.top(), 0);
                                 ops.pop();
-                                break;
-                        case VAR:
-                                postfix.emplace_back(VAR, 0);
-                                break;
-                        case VAL:
-                                postfix.emplace_back(VAL, it->second);
                                 break;
                 }
                 if (par_depth < 0) {
@@ -303,9 +304,81 @@ void recurrence::jit_compile() {
         jit_compute = reinterpret_cast<double (*)(double)>(codepage);
 }
 
+// TODO: honestly easiest thing may be to just use an AST rather than a vector to store the eqn.
+//  Not necessary to compute, but trying to do basic CAS manipulation on a linear container SUCKS lol
+
+// This routine attempts to optimize the postfix format produced by the constructor, essentially
+// by precomputing whatever it can.
+// For example, "(((54 + 3) / n) - (4 * 2)) + n" becomes "((57 / n) - 8) + n",
+// or in postfix notation, [54, 3, +, n, /, 4, 2, *, -, n, +] becomes [57, n, /, 8, -, n, +]
 void recurrence::postfix_optimize() {
-        // STUB
-        return;
+        // We use a pretty naive algorithm to do this: essentially just compute the expression
+        // as though we are using an interpreter, and whenever we encounter a VAR token, we write
+        // the top of the computation stack, that VAR, and the corresponding OP to our postfix expr
+        std::list<token> new_pf{pf.begin(), pf.end()};
+        vector<const token*> calc;
+        vector<TOKENTYPE> ops;
+        const token *n1, *n2;
+        for (const auto &tok : new_pf) {
+                switch (tok.first) {
+                    case VAR:
+                    case VAL:
+                        calc.push_back(&tok);
+                        break;
+                    case PLUS ... DIV: {
+                        n2 = calc.back(); calc.pop_back();
+                        n1 = calc.back(); calc.pop_back();
+                        std::initializer_list<token> tks;
+                        if (n1->first == VAL && n2->first == VAL) {
+                                double constant;
+                                switch (tok.first) {
+                                    case PLUS:
+                                        constant = n1->second + n2->second;
+                                        break;
+                                    case MINUS:
+                                        constant = n1->second - n2->second;
+                                        break;
+                                    case TIMES:
+                                        constant = n1->second * n2->second;
+                                        break;
+                                    case DIV:
+                                        constant = n1->second / n2->second;
+                                        break;
+                                }
+                                tks = {{VAL, constant}};
+                                calc.push_back(tks.begin());
+                        } else {
+                                calc.push_back(n1);
+                                calc.push_back(n2);
+                                ops.push_back(tok.first);
+//                                if (n1->first == VAR && n2->first == VAR)
+//                                        tks = {*n1, *n2, tok};
+//                                else if (n1->first == VAR)
+//                                        tks = {*n1, tok};
+//                                else
+//                                        tks = {*n2, tok};
+                        }
+
+//                        new_pf.insert(new_pf.end(), tks.begin(), tks.end());
+                        break;
+                    }
+                    default:
+                        std::cerr << "Unknown error occurred. Aborting.\n";
+                        exit(EXIT_FAILURE);
+                }
+        }
+        for (auto op :) {
+                new_pf.push_back(*calc.top()); calc.pop();
+                new_pf.push_back(*calc.top()); calc.pop();
+                new_pf.emplace_back(ops.top(), 0); ops.pop();
+        }
+        print_tokens(new_pf);
+        if (!calc.empty()) {
+                std::cerr << "***Error: stack not empty! Aborting.\n";
+                exit(EXIT_FAILURE);
+        }
+
+
 }
 
 void recurrence::print_tokens(const vector<token> &tkns) {

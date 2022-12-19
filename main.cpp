@@ -26,10 +26,11 @@ int main() {
         std::cout << "Number of iterations?\n";
 //        std::cin >> nIter;
         recurrence r(expr, lastN);
-        r.jit_compile();
+        r.postfix_optimize();
+//        r.jit_compile();
 //        r.print_toks();
 //        r.print_pf();
-        std::cout << r.compute(nIter) << std::endl;
+//        std::cout << r.compute(nIter) << std::endl;
 //        fflush(nullptr);
 //        for (int i = 0; i < nIter; i++)
 //                lastN = r1(lastN);
