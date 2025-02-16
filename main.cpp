@@ -5,35 +5,50 @@
 #include <string>
 #include "recurrence.h"
 
+using namespace std;
 
-// upper bound to compare our optimization to GCC's
-#pragma GCC optimize ("O3")
-// leave the overhead of a function call to make it as accurate as possible
-[[gnu::noinline]]
-double r1(double lastN = 0) {
-        return (((54 + 3) / lastN) - (4 * 2)) + lastN;
+[[noreturn]]
+static void usage(const char *progname) {
+        cerr << "usage: " << progname
+                << " [equation [n_iter [N_0]]]"
+                << endl;
+        exit(1);
 }
 
-int main() {
-        std::string expr = "(((54 + 3) / n) - (4 * 2)) + n";
-        int nIter = 10000000;
-        double lastN = 1;
-        std::cout << "Enter expression: \n";
-//        std::cout << expr << std::endl;
+int main(int argc, char *argv[]) {
         // test with (((54 + 3) / 8) - (4 * 2)) + n
         // output: [54, 3, +, 8, /, 4, 2, *, -, n, +]
-//        std::getline(std::cin, expr);
-        std::cout << "Number of iterations?\n";
-//        std::cin >> nIter;
-        recurrence r(expr, lastN);
-        r.jit_compile();
+        string expr = "(((54 + 3) / 8) - (4 * 2)) + n";
+        size_t nIter = 100000;
+        double N_0 = 0;
+
+        try {
+                switch (argc) {
+                    case 4:
+                        N_0 = stod(argv[3]);
+                    case 3:
+                        nIter = stoul(argv[2]);
+                    case 2:
+                        expr = argv[1];
+                    case 1:
+                        break;
+                    default:
+                        usage(argv[0]);
+                }
+        } catch (invalid_argument &e) {
+                cerr << e.what() << endl;
+                usage(argv[0]);
+        }
+
+        
+        recurrence r(expr);
+//        r.jit_compile();
 //        r.print_toks();
 //        r.print_pf();
-        std::cout << r.compute(nIter) << std::endl;
-//        fflush(nullptr);
-//        for (int i = 0; i < nIter; i++)
-//                lastN = r1(lastN);
-//        std::cout << lastN << std::endl;
-//        std::cout << r.compute(nIter, false) << std::endl;
+        cout << "with JIT: "
+                << r.compute(nIter) << endl;
+        fflush(nullptr);
+        // cout << "without JIT: "
+        //         << r.compute(nIter, false) << endl;
         return 0;
 }
