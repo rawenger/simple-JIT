@@ -26,7 +26,7 @@ class recurrence {
     vector<token> tokens;
     vector<token> pf;
     double N0; // initial recurrence value
-    double (*jit_compute) (double nLast) = nullptr;
+    double (*jit_compute) (double nLast, size_t nIter /* = 1*/) = nullptr;
     size_t codesize = 0;
 
     static void print_tokens(const vector<token> &tkns);

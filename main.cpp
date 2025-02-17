@@ -18,7 +18,7 @@ static void usage(const char *progname) {
 int main(int argc, char *argv[]) {
     // test with (((54 + 3) / 8) - (4 * 2)) + n
     // output: [54, 3, +, 8, /, 4, 2, *, -, n, +]
-    string expr = "(((54 + 3) / 8) - (4 * 2)) + n";
+    string expr = "(((54 + n) / 3) - (4 * 2)) * n";
     size_t nIter = 100000;
     double N_0 = 0;
 
@@ -41,10 +41,10 @@ int main(int argc, char *argv[]) {
     }
 
     
-    recurrence r(expr);
-    // r.jit_compile();
+    recurrence r {expr, N_0};
     // r.print_toks();
     // r.print_pf();
+    // r.jit_compile();
     cout << "with JIT: "
             << r.compute(nIter) << endl;
     fflush(nullptr);
