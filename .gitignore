@@ -4,3 +4,4 @@ simple_JIT
 .idea
 *.swp
 *build*
+.cache

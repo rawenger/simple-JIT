@@ -2,6 +2,8 @@
 // Created by ryan on 12/16/22.
 //
 
+#include <cerrno>
+#include <cstdlib>
 #include <iostream>
 #include <stack>
 #include <algorithm>
@@ -175,6 +177,10 @@ double recurrence::compute(size_t nIter, bool use_jit) {
                   case DIV:
                     compute = n1 / n2;
                     break;
+                  default:
+                    // silence compiler warning about unhandled switch cases
+                    std::cerr << "internal error occurred. aborting\n";
+                    exit(EXIT_FAILURE);
                 }
                 calc.push(compute);
                 break;
@@ -271,6 +277,8 @@ void recurrence::jit_compile() {
                 break;
               case DIV:
                 code.push_back(0x5e);
+                break;
+              default:
                 break;
             }
             code.push_back(0xc1);
@@ -475,6 +483,8 @@ void recurrence::jit_compile()
               case DIV:
                 fpop.opc = 0b000110;
                 break;
+              default:
+                break;
             }
             
             append_code({
@@ -510,7 +520,7 @@ void recurrence::jit_compile()
     } __attribute__((packed)) cbnz_instr = {
         .Rt     = 9,
         .offset = cbnz_offset,
-        .opcode = 0xb5,
+        .opcode = (char) 0xb5,
     };
 
     // don't care about loop_size anymore so ok to use this
