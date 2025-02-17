@@ -3,3 +3,4 @@ cmake-build*
 simple_JIT
 .idea
 *.swp
+*build*
