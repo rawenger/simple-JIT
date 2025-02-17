@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stack>
 #include <algorithm>
+#include <cstdint>
 
 #include <unistd.h>
 #include <sys/mman.h>
@@ -381,12 +382,6 @@ void recurrence::jit_compile()
             break;
 
           case VAL: {
-            struct mov_instr {
-                uint32_t Rd: 5,
-                         imm: 16,
-                         sh: 2,
-                         opc: 9;
-            };
             uint64_t imms = *reinterpret_cast<const uint64_t *>(&tok.second);
             if (imms == 0) {
                 append_code({
@@ -406,12 +401,18 @@ void recurrence::jit_compile()
                 if (!imm16)
                     continue;
 
-                mov_instr instr {
-                    .opc = 0,
-                    .sh = i / 16,
+                struct {
+                    uint32_t Rd: 5,
+                             imm: 16,
+                             sh: 2,
+                             opc: 9;
+                } __attribute__((packed)) instr = {
+                    .Rd = 10,
                     .imm = imm16,
-                    .Rd = 10
+                    .sh = i / 16,
+                    .opc = 0,
                 };
+
                 if (zeroed) {
                     instr.opc = 0b111100101;
                 } else {
@@ -450,14 +451,14 @@ void recurrence::jit_compile()
                          one: 1,
                          ftype: 2, // 1 for double word
                          misc: 8; // 0b00011110
-            } __attribute__((packed)) fpop {
-                .misc = 0x1e,
-                .ftype = 0b01,
-                .one = 0b01,
-                .Rm = 2,
+            } __attribute__((packed)) fpop = {
+                .Rd = 1,
                 .Rn = 1,
                 .opc = 0,
-                .Rd = 1,
+                .Rm = 2,
+                .one = 0b01,
+                .ftype = 0b01,
+                .misc = 0x1e,
             };
 
             // <op> d1, d1, d2
@@ -506,10 +507,10 @@ void recurrence::jit_compile()
         int32_t Rt: 5, // remember little-endian
                 offset: 19,
                 opcode: 8;
-    } cbnz_instr = {
-        .opcode = 0xb5,
-        .offset = cbnz_offset,
+    } __attribute__((packed)) cbnz_instr = {
         .Rt     = 9,
+        .offset = cbnz_offset,
+        .opcode = 0xb5,
     };
 
     // don't care about loop_size anymore so ok to use this
