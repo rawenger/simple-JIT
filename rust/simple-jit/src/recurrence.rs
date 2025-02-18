@@ -1,9 +1,8 @@
 #![allow(unused)]  // TODO: remove!!
 use crate::ast::AST;
+use crate::numtype::NumType;
 use anyhow::{anyhow,bail,Result};
 use derive_more::Display;
-
-pub type NumType = f64;
 
 const SYMBOLS: [char; 7] = ['+', '-', '*', '/', '^', '(', ')'];
 
@@ -37,7 +36,7 @@ impl Recurrence {
 							Token::MINUS => n1 - n2,
 							Token::TIMES => n1 * n2,
 							Token::DIV => n1 / n2,
-							Token::POW => n1.powf(n2),
+							Token::POW => n1 ^ n2,
 							_ => panic!("unknown error occurred")
 						};
 						calc.push(compute);

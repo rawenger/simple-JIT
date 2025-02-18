@@ -1,9 +1,11 @@
 #![feature(box_patterns, try_blocks)]
 mod ast;
 mod recurrence;
+mod numtype;
 
 use clap::Parser;
 use anyhow::Result;
+use numtype::NumType;
 use recurrence::Recurrence;
 
 
@@ -23,15 +25,16 @@ struct Args {
     pub num_iter: usize,
 
     /// initial value of `x`
-    #[arg(short='0', long, default_value_t = 0_f64)]
-    pub x0: f64,
+    #[arg(short='0', long, default_value_t = String::from("0"))]
+    pub x0: String,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
     // dbg!(&args);
     let r = Recurrence::new(&args.equation)?;
-    println!("computing in-place: {}", r.compute(args.x0, args.num_iter));
+    let x0 = args.x0.parse::<NumType>()?;
+    println!("computing in-place: {}", r.compute(x0, args.num_iter));
     let mut a = r.make_ast()?;
     println!("AST: {a}");
     a = a.reduce();

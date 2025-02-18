@@ -5,7 +5,8 @@
 #![allow(unused)]
 use anyhow::{anyhow, bail, Result};
 use derive_more::Display;
-use crate::recurrence::{self,NumType};
+use crate::recurrence;
+use crate::numtype::NumType;
 use std::cell::Cell;
 
 /// convenience shorthand to construct `Ex` object and place it in a Box
@@ -152,7 +153,7 @@ impl BinOp {
 			MINUS => left - right,
 			TIMES => left * right,
 			DIV => left / right,
-			POW => left.powf(right),
+			POW => left ^ (right),
 		}
 	}
 }
