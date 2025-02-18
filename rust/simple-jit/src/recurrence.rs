@@ -20,7 +20,7 @@ impl Recurrence {
 	}
 
 	pub fn compute(&self, x0: NumType, n_iter: usize) -> NumType {
-		dbg!(&self.eqn);
+		// dbg!(&self.eqn);
 		let mut calc = Vec::new();
 		let mut n_last = x0;
 
@@ -51,6 +51,7 @@ impl Recurrence {
 
 	pub fn make_ast(&self) -> Result<AST> {
 		AST::construct(&self.eqn)
+			.ok_or_else(|| anyhow!("malformed expression -- unable to convert to AST"))
 	}
 }
 

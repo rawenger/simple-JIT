@@ -3,15 +3,22 @@
  */
 
 #![allow(unused)]
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use derive_more::Display;
 use crate::recurrence::{self,NumType};
 use std::cell::Cell;
 
-// note: Box may need to hold MaybeUnint<ASTNode>, we'll see.
-type Operand = Box<ASTNode>;
+/// convenience shorthand to construct `Ex` object and place it in a Box
+/// (name short for "Ex inside Box")
+macro_rules! eb {
+	($left:expr, $op:expr, $right:expr) => { 
+		Box::new(Ex($left, $op, $right))
+	};
+}
 
-// internal representation for numbers
+// note: Box may need to hold MaybeUnint<ASTNode>, we'll see.
+type Operand = ASTNode;
+
 
 #[derive(Display)]
 #[display("{}", root)]
@@ -21,26 +28,12 @@ pub struct AST {
 
 impl AST {
 
-	pub fn construct(pfix: &Vec<recurrence::Token>) -> Result<Self> {
+	pub fn construct(pfix: &Vec<recurrence::Token>) -> Option<Self> {
 		/* CONSTRUCTION ALGORITHM:
 		 * 
 		 * ** construct AST from postfix **
 		 *	- construct left child, pass into recursion, propagate up until root
 		 */
-
-
-		// let test1 = ASTNode::OP(Op::PLUS(
-		// 	Box::from(ASTNode::OP(Op::TIMES(
-		// 		Box::from(ASTNode::VAL(1.5)), Box::from(ASTNode::VAR))))
-		// 	,
-		// 	Box::from(ASTNode::OP(Op::DIV(
-		// 		Box::from(ASTNode::VAL(3.0)), 
-		// 		Box::from(ASTNode::OP(Op::MINUS(
-		// 			Box::from(ASTNode::VAL(6.0)), 
-		// 			Box::from(ASTNode::VAR))))
-		// 		)))
-		// 	));
-		// println!("test1: {test1}");
 
 		let mut calc = Vec::new();
 
@@ -48,26 +41,26 @@ impl AST {
 			use recurrence::Token;
 			use ASTNode::*;
 			match tok {
-				Token::NUM(n) => calc.push(Operand::new(VAL(*n))),
-				Token::ALPHA(_) => calc.push(Operand::new(VAR)),
+				Token::NUM(n) => calc.push(VAL(*n)),
+				Token::ALPHA(_) => calc.push(VAR),
 				tok => {
-					let n2 = calc.pop().unwrap();
-					let n1 = calc.pop().unwrap();
+					let (n2, n1) = (calc.pop()?, calc.pop()?);
 					let compute = match tok {
-						Token::PLUS => OP(n1, Op::PLUS, n2),
-						Token::MINUS => OP(n1, Op::MINUS, n2),
-						Token::TIMES => OP(n1, Op::TIMES, n2),
-						Token::DIV => OP(n1, Op::DIV, n2),
-						Token::POW => OP(n1, Op::POW, n2),
-						_ => panic!("unknown error occurred")
+						Token::PLUS => APPLY(eb!(n1, BinOp::PLUS, n2)),
+						Token::MINUS => APPLY(eb!(n1, BinOp::MINUS, n2)),
+						Token::TIMES => APPLY(eb!(n1, BinOp::TIMES, n2)),
+						Token::DIV => APPLY(eb!(n1, BinOp::DIV, n2)),
+						Token::POW => APPLY(eb!(n1, BinOp::POW, n2)),
+						_ => return None,
 					};
-					calc.push(opn(compute));
+					calc.push(compute);
 				}
 			}
 		}
 
-		return Ok(Self {
-			root: *calc.pop().unwrap()
+		// expression *should* already be valid
+		return Some(Self {
+			root: calc.pop()?
 		})
 	}
 
@@ -84,12 +77,16 @@ impl AST {
 }
 
 #[derive(Display)]
-enum ASTNode {
-	#[display("({_0} {_1} {_2})")]
-	OP(Operand, Op, Operand),
+#[display("{_0} {_1} {_2}")]
+struct Ex(Operand, BinOp, Operand);
 
-	#[display("({_0} {_1} {_2})")]
-	ReducedOp(Operand, Op, Operand),
+#[derive(Display)]
+enum ASTNode {
+	#[display("({_0})")]
+	APPLY(Box<Ex>),
+
+	#[display("({_0})")]
+	HOLD(Box<Ex>),
 
 	#[display("{_0}")]
 	VAL(NumType),
@@ -97,7 +94,6 @@ enum ASTNode {
 	#[display("x")]
 	VAR,
 }
-
 		
 impl ASTNode {
 	/// reduces itself (if possible) by
@@ -107,35 +103,35 @@ impl ASTNode {
 		match self {
 			VAR => VAR,
 			VAL(v) => VAL(v),
-			ReducedOp(l, o, r) => ReducedOp(l, o, r),
-			OP(box left, op, box right) => {
-				match (left, right) { // this is going to get very repetitive...
+			HOLD(re) => HOLD(re),
+			APPLY(box Ex(left, op, right)) => {
+				match (left, right) {
 					// 2 values
 			        (VAL(v1), VAL(v2)) => VAL(op.compute(v1, v2)),
 
-			        (VAR, VAL(v)) => ReducedOp(opn(VAR), op, opn(VAL(v))),
-			        (VAR, VAL(v)) => ReducedOp(opn(VAL(v)), op, opn(VAR)),
-			        (VAR, VAR) => ReducedOp(opn(VAR), op, opn(VAR)),
+			        // values cannot (yet) combine with variables
+			        // eventually, things like 0*x and 1^x will simplify
+			        (VAR, VAL(v)) => HOLD(eb!(VAR, op, VAL(v))),
+			        (VAL(v), VAR) => HOLD(eb!(VAL(v), op, VAR)),
 
-			        (ReducedOp(l, o, r), o2) => ReducedOp(opn(ReducedOp(l, o, r)), op, opn(o2.reduce())),
-			        (o2, ReducedOp(l, o, r)) => ReducedOp(opn(o2.reduce()), op, opn(ReducedOp(l, o, r))),
+			        // variables cannot combine with each other (yet) either
+			        (VAR, VAR) => HOLD(eb!(VAR, op, VAR)),
 
-			        // both OP
-			        (o1, o2) => OP(opn(o1.reduce()), op, opn(o2.reduce())),
-    			}.reduce()
+			        // block infinite recursion by preserving Hold on already-reduced expressions
+			        (HOLD(r_ex), ex) => HOLD(eb!(HOLD(r_ex), op, ex.reduce())),
+			        (ex, HOLD(r_ex)) => HOLD(eb!(ex.reduce(), op, HOLD(r_ex))),
+
+			        // both sides reducible
+			        (ex1, ex2) => APPLY(eb!(ex1.reduce(), op, ex2.reduce())),
+    			}.reduce() // <-- IMPORTANT! without this we miss the final simplification
 			},
 			_ => panic!("WTF")
 		}
 	}
 }
 
-/// shorthand
-fn opn(n: ASTNode) -> Operand {
-	Operand::new(n)
-}
-
 #[derive(Display)]
-enum Op {
+enum BinOp {
 	#[display("+")]
 	PLUS,
 	#[display("-")]
@@ -148,9 +144,9 @@ enum Op {
 	POW, // .0 is base, .1 is exp
 }
 
-impl Op {
+impl BinOp {
 	pub fn compute(&self, left: NumType, right: NumType) -> NumType {
-		use Op::*;
+		use BinOp::*;
 		match self {
 			PLUS => left + right,
 			MINUS => left - right,

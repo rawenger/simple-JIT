@@ -1,4 +1,4 @@
-#![feature(box_patterns)]
+#![feature(box_patterns, try_blocks)]
 mod ast;
 mod recurrence;
 
@@ -31,6 +31,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     // dbg!(&args);
     let r = Recurrence::new(&args.equation)?;
+    println!("computing in-place: {}", r.compute(args.x0, args.num_iter));
     let mut a = r.make_ast()?;
     println!("AST: {a}");
     a = a.reduce();
