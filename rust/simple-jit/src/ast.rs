@@ -95,7 +95,7 @@ enum ASTNode {
 	#[display("x")]
 	VAR,
 }
-		
+
 impl ASTNode {
 	/// reduces itself (if possible) by
 	/// converting ::OP to ::VAL
@@ -107,14 +107,17 @@ impl ASTNode {
 			HOLD(re) => HOLD(re),
 			APPLY(box Ex(left, op, right)) => {
 				match (left, right) {
+					/***** base cases *****/
 					// 2 values
-			        (VAL(v1), VAL(v2)) => VAL(op.compute(v1, v2)),
+			        (VAL(v1), VAL(v2)) => VAL(op.compute_val(v1, v2)),
 
 			        // values cannot (yet) combine with variables
 			        // eventually, things like 0*x and 1^x will simplify
 			        (VAR, VAL(v)) => HOLD(eb!(VAR, op, VAL(v))),
-			        (VAL(v), VAR) => HOLD(eb!(VAL(v), op, VAR)),
-
+                    (VAL(v), VAR) => HOLD(eb!(VAL(v), op, VAR)),
+			        // (VAL(v), ast) => op.apply_left_num(v, ast.reduce()?),
+			        // (ast, VAL(v)) => op.apply_right_num(ast.reduce()?, v),
+			        
 			        // variables cannot combine with each other (yet) either
 			        (VAR, VAR) => HOLD(eb!(VAR, op, VAR)),
 
@@ -122,6 +125,7 @@ impl ASTNode {
 			        (HOLD(r_ex), ex) => HOLD(eb!(HOLD(r_ex), op, ex.reduce())),
 			        (ex, HOLD(r_ex)) => HOLD(eb!(ex.reduce(), op, HOLD(r_ex))),
 
+			        /***** recursive cases *****/
 			        // both sides reducible
 			        (ex1, ex2) => APPLY(eb!(ex1.reduce(), op, ex2.reduce())),
     			}.reduce() // <-- IMPORTANT! without this we miss the final simplification
@@ -131,7 +135,7 @@ impl ASTNode {
 	}
 }
 
-#[derive(Display)]
+#[derive(Display, Clone, Copy)]
 enum BinOp {
 	#[display("+")]
 	PLUS,
@@ -146,7 +150,7 @@ enum BinOp {
 }
 
 impl BinOp {
-	pub fn compute(&self, left: NumType, right: NumType) -> NumType {
+	pub fn compute_val(&self, left: NumType, right: NumType) -> NumType {
 		use BinOp::*;
 		match self {
 			PLUS => left + right,
@@ -154,6 +158,75 @@ impl BinOp {
 			TIMES => left * right,
 			DIV => left / right,
 			POW => left ^ (right),
+		}
+	}
+
+	// NOTE: convert PLUS and TIMES to canonicalize the un-simplified operand on the right 
+	//  (or left? -- see which works better later)!
+	// also, would it be better to just overload the arithmetic operators for AST node,
+	// then apply those correspondingly? possibly...
+	// not a big fan of this method, and it doesn't *fully* work (currently) anyway
+	pub fn apply_left_num(&self, left: NumType, right: ASTNode) -> ASTNode {
+		use ASTNode::*;
+		use BinOp::*;
+		use NumType::*;
+		
+		match self {
+			PLUS => match left {
+				I(0) | F(0.0) => right,
+				_ => HOLD(eb!(VAL(left), PLUS, right)),
+			},
+			MINUS => match left {
+				I(0) | F(0.0) => APPLY(eb!(VAL(I(-1)), TIMES, right)),
+				_ => HOLD(eb!(VAL(left), *self, right)),
+			},
+			TIMES => match left {
+				I(0) | F(0.) => VAL(I(0)),
+				I(1) | F(1.) => right,
+				_ => HOLD(eb!(VAL(left), *self, right)),
+			},
+			DIV => match left {
+				I(0) | F(0.) => panic!("divide by zero error: attempted to perform {right} / 0"),
+				I(1) | F(1.) => right,
+				_ => HOLD(eb!(VAL(left), *self, right)),
+			},
+			POW => match left {
+				I(0) | F(0.) => VAL(I(1)),
+				I(1) | F(1.) => right,
+				_ => HOLD(eb!(VAL(left), *self, right)),
+			}
+		}
+	}
+
+	pub fn apply_right_num(&self, left: ASTNode, right: NumType) -> ASTNode {
+		use ASTNode::*;
+		use BinOp::*;
+		use NumType::*;
+		
+		match self {
+			PLUS => match right {
+				I(0) | F(0.0) => left,
+				_ => HOLD(eb!(VAL(right), PLUS, left)),
+			},
+			MINUS => match right {
+				I(0) | F(0.0) => APPLY(eb!(VAL(I(-1)), TIMES, left)),
+				_ => HOLD(eb!(left, *self, VAL(right))),
+			},
+			TIMES => match right {
+				I(0) | F(0.) => VAL(I(0)),
+				I(1) | F(1.) => left,
+				_ => HOLD(eb!(VAL(right), *self, left)),
+			},
+			DIV => match right {
+				I(0) | F(0.) => panic!("divide by zero error: attempted to perform {left} / 0"),
+				I(1) | F(1.) => left,
+				_ => HOLD(eb!(left, *self, VAL(right))),
+			},
+			POW => match right {
+				I(0) | F(0.) => VAL(I(1)),
+				I(1) | F(1.) => left,
+				_ => HOLD(eb!(left, *self, VAL(right))),
+			}
 		}
 	}
 }
